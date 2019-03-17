@@ -67,20 +67,26 @@ class Map_Create(object):
         #为了更好的索引节点，邻接矩阵大一点
         self.node_num = self.cross_df.shape[0]+1
         self.max_num = 100000
-        #路径图，节点数据分别为 id,length,speed,channel
-        self.map = np.full((self.node_num,self.node_num,5),self.max_num,dtype=int)
-        self.init_map()
+        #路径图，储存的地图分别有普通地图，高速路地图，低速路地图
+        self.map = np.full((3,self.node_num,self.node_num,5),self.max_num,dtype=int)
+        self.norm_map_idx = 0
+        self.high_map_idx = 1
+        self.low_map_idx = 2
+        self.norm_path_idx = 0
+        self.high_path_idx = 1
+        self.low_path_idx = 2
         self.id_idx = 0
         self.length_idx = 1
         self.speed_idx = 2
         self.channel_idx = 3
         self.time_idx = 4
         
-        self.shortest_path = np.ndarray((self.node_num,self.node_num),dtype=object)
-        self.find_path()
-        
+        self.init_map()
         self.init_high_way()
         self.init_low_way()
+        self.path = np.ndarray((3,self.node_num,self.node_num),dtype=object)
+        self.find_path()
+        
     def init_map(self):
         for i in self.road_df.index:
             road =self.road_df.loc[i,:]
@@ -89,40 +95,34 @@ class Map_Create(object):
             road_value[4] = int(road_value[1] / road_value[3])
             node_from = road.loc['from']
             node_to = road.loc['to']
-            self.map[node_from][node_to] = road_value
+            self.map[self.norm_map_idx][node_from][node_to] = road_value
             if road.loc['isDuplex'] == 1:
-                self.map[node_to][node_from] = road_value
+                self.map[self.norm_map_idx][node_to][node_from] = road_value
             logging.info("creat map ok")
         pass
    
-    def BFS(self, u, high):
+    def BFS(self, u, map_idx):
         q = queue.Queue()
         self.inq[u] = 1
         q.put_nowait(u)
         while(q.empty() != True):
             u = q.get_nowait()
             for v in range(1,self.node_num):
-                if high == 1:
-                    if self.inq[v] == 0 and self.high_map[u][v][self.time_idx] != self.max_num:
-                        q.put_nowait(v)
-                        self.inq[v] = 1
-                else:
-                    if self.inq[v] == 0 and self.low_map[u][v][self.time_idx] != self.max_num:
-                        q.put_nowait(v)
-                        self.inq[v] = 1
-                        
+                if self.inq[v] == 0 and self.map[map_idx][u][v][self.time_idx] != self.max_num:
+                    q.put_nowait(v)
+                    self.inq[v] = 1     
         pass
     '''
     广度遍历图
     返回连通分量的个数，以及每个连通分量其中一个节点
     '''
-    def BFS_Trave(self,high):
+    def BFS_Trave(self,map_idx):
         self.inq = np.full((self.node_num,),0,dtype=int)
         BFS_num = 0
         node = np.array([],dtype=int)
         for u in range(1,self.node_num):
             if self.inq[u]==0:
-                self.BFS(u,high)
+                self.BFS(u,map_idx)
                 BFS_num += 1
                 node = np.append(node,u)
         return BFS_num, node
@@ -131,46 +131,51 @@ class Map_Create(object):
     如果图不连通，打开某个节点的所有边
     '''
     def init_high_way(self):
-        self.high_map = self.map.copy()
+        self.map[self.high_map_idx] = self.map[self.norm_map_idx].copy()
         road_value = np.full((5,),self.max_num,dtype=int)
         #遍历矩阵，如果限速小于6，则删除这条道路
         for i in range(1,self.node_num):
             for j in range(1,self.node_num):
-                if self.map[i][j][self.speed_idx] != self.max_num and self.map[i][j][self.speed_idx] < 6:
-                    self.high_map[i][j] = road_value
+                if self.map[self.norm_map_idx][i][j][self.speed_idx] != self.max_num and self.map[self.norm_map_idx][i][j][self.speed_idx] < 6:
+                    self.map[self.high_map_idx][i][j] = road_value
         #得到当前的2连通分量
-        BFS_num, node = self.BFS_Trave(high=1)
+        BFS_num, node = self.BFS_Trave(self.high_map_idx)
         if BFS_num != 1:
             for i in node:
-                self.high_map[i,:,:] = self.map[i,:,:]
-                self.high_map[:,i,:] = self.map[:,i,:]
+                self.map[self.high_map_idx][i,:,:] = self.map[self.norm_map_idx][i,:,:]
+                self.map[self.high_map_idx][:,i,:] = self.map[self.norm_map_idx][:,i,:]
         pass
     '''
     创建低速路，即限速为4的道路
     如果块数过多，考虑划分4,6为低速路
     '''
     def init_low_way(self):
-        self.low_map = self.map.copy()
+        self.map[self.low_map_idx] = self.map[self.norm_map_idx].copy()
         road_value = np.full((5,),self.max_num,dtype=int)
         #遍历矩阵，如果限速小于6，则删除这条道路
         for i in range(1,self.node_num):
             for j in range(1,self.node_num):
-                if self.map[i][j][self.speed_idx] != self.max_num and self.map[i][j][self.speed_idx] > 6:
-                    self.low_map[i][j] = road_value
+                if self.map[self.norm_map_idx][i][j][self.speed_idx] != self.max_num and self.map[self.norm_map_idx][i][j][self.speed_idx] > 6:
+                    self.map[self.low_map_idx][i][j] = road_value
         #得到当前的2连通分量
-        BFS_num, node = self.BFS_Trave(high=0)
+        BFS_num, node = self.BFS_Trave(self.low_map_idx)
         if BFS_num != 1:
             for i in node:
-                self.low_map[i,:,:] = self.map[i,:,:]
-                self.low_map[:,i,:] = self.map[:,i,:]
-        pass
+                self.map[self.low_map_idx][i,:,:] = self.map[self.norm_map_idx][i,:,:]
+                self.map[self.low_map_idx][:,i,:] = self.map[self.norm_map_idx][:,i,:]
+        '''
+        放开21的边
+        '''
+        self.map[self.low_map_idx][21,:,:] = self.map[self.norm_map_idx][21,:,:]
+        self.map[self.low_map_idx][:,21,:] = self.map[self.norm_map_idx][:,21,:]
+        
         pass
     '''
     单源最短路径
     输入：当前节点
     输出：最短路径
     '''
-    def dijkstra(self,node):
+    def dijkstra(self,node,map_idx):
         d = np.full((self.node_num,),self.max_num) #存储节点间的最短距离
         pre = np.arange(0,self.node_num)      #存储最短路径的前驱
         vis = np.full((self.node_num,),0)     #是否访问标记
@@ -185,19 +190,20 @@ class Map_Create(object):
                     min_num = d[j]
             vis[u] = 1
             for v in range(1,self.node_num):
-                du = d[u] + self.map[u][v][self.time_idx]
-                if (vis[v]==0 and self.map[u][v][self.time_idx]!=self.max_num and du <d[v]):
+                du = d[u] + self.map[map_idx][u][v][self.time_idx]
+                if (vis[v]==0 and self.map[map_idx][u][v][self.time_idx]!=self.max_num and du <d[v]):
                     d[v] = du
                     pre[v] = u
         return pre
     #存储所有节点之间的最短路径
     def find_path(self):
         #对所有节点作dijkstra
-        for i in range(1,self.node_num):
-            pre = self.dijkstra(i)
-            for j in range(1,self.node_num):
-                path = DFS(i, j, pre)
-                self.shortest_path[i][j] = path
+        for path_idx in range(3):
+            for i in range(1,self.node_num):
+                pre = self.dijkstra(i,path_idx)
+                for j in range(1,self.node_num):
+                    path = DFS(i, j, pre)
+                    self.path[path_idx][i][j] = path
         pass
     '''
     绕路判断
@@ -215,10 +221,13 @@ class Map_Create(object):
         
         return now_path
 class Schedul_Strate(object):
-    def __init__(self, map, car_df, shortest_path, answer_path):
-        self.map = map
+    def __init__(self, map_, car_df, path, answer_path):
+        self.norm_map_idx = 0
+        self.high_map_idx = 1
+        self.low_map_idx = 2
+        self.map = map_
         self.car_df = car_df.copy()
-        self.shortest_path = shortest_path
+        self.path = path
         self.answer_path = answer_path
         
     '''
@@ -234,13 +243,17 @@ class Schedul_Strate(object):
             #循环处理车辆并写入结果
             for i in self.car_df.index:
                 car_id,node_from,node_to,speed,planTime = self.car_df.loc[i,:]
-                planTime = random.randint(planTime,planTime+700)
+                if speed >= 6 :
+                    map_idx = self.high_map_idx
+                else:
+                    map_idx = self.low_map_idx
+                planTime = random.randint(planTime,planTime+600)
                 buffer = '('+str(car_id)+','+str(planTime)
-                now_path = self.shortest_path[node_from][node_to]
+                now_path = self.path[map_idx][node_from][node_to]
                 for i in range(1,len(now_path)):
                     now_node = now_path[i]
                     last_node = now_path[i-1]
-                    road_id = self.map[last_node][now_node][0]
+                    road_id = self.map[self.norm_map_idx][last_node][now_node][0]
                     buffer += ',' + str(road_id)
                 buffer += ')\n'
                 f.writelines(buffer)
@@ -265,16 +278,16 @@ def main():
     # process
     Map = Map_Create(Data.road_df, Data.cross_df)
     # to write output file
-    Strate = Schedul_Strate(Map.map, Data.car_df, Map.shortest_path, answer_path)
+    Strate = Schedul_Strate(Map.map, Data.car_df, Map.path, answer_path)
     Strate.schedule()
 if __name__ == "__main__":
-#    main()
-    car_path = './1-map-training-1/car.txt'
-    road_path = './1-map-training-1/road.txt'
-    cross_path = './1-map-training-1/cross.txt'
-    answer_path = './1-map-training-1/answer.txt'
-    
-    Data = Read_Data(car_path, road_path, cross_path, answer_path)
-    Map = Map_Create(Data.road_df, Data.cross_df)
-    Strate = Schedul_Strate(Map.map, Data.car_df, Map.shortest_path, answer_path)
-    Strate.schedule()
+    main()
+#    car_path = './1-map-training-1/car.txt'
+#    road_path = './1-map-training-1/road.txt'
+#    cross_path = './1-map-training-1/cross.txt'
+#    answer_path = './1-map-training-1/answer.txt'
+#    
+#    Data = Read_Data(car_path, road_path, cross_path, answer_path)
+#    Map = Map_Create(Data.road_df, Data.cross_df)
+#    Strate = Schedul_Strate(Map.map, Data.car_df, Map.path, answer_path)
+#    Strate.schedule()
