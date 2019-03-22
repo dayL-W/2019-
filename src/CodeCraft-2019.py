@@ -60,6 +60,26 @@ def DFS(s, v, pre):
     path = np.append(path,t)
     path =np.append(path,v)
     return path
+
+'''
+返回前驱表示的所有的最短路径
+'''
+def get_paths(start, index, pre):
+    child = []
+    mid = []
+    if index != start:
+        for i in pre[index]:
+            child = get_paths(start, i, pre)
+            for j in child:
+                j.append(index)
+            if len(mid)==0:
+                mid = child
+            else:
+                for t in child:
+                    mid.append(t)
+    else:
+        mid.append([start])
+    return mid
 class Map_Create(object):
     def __init__(self,road_df, cross_df):
         self.road_df = road_df
@@ -85,7 +105,9 @@ class Map_Create(object):
         self.init_high_way()
         self.init_low_way()
         self.path = np.ndarray((3,self.node_num,self.node_num),dtype=object)
+        self.all_shortest_paths = np.ndarray((self.node_num,self.node_num),dtype=object)
         self.find_path()
+        self.find_all_path()
         
     def init_map(self):
         for i in self.road_df.index:
@@ -195,6 +217,36 @@ class Map_Create(object):
                     d[v] = du
                     pre[v] = u
         return pre
+    '''
+    单源最短路径
+    输入：当前节点
+    输出：所有的最短路径，所有的最短路径只有一条？？
+    '''
+    def dijkstra_all(self,node,map_idx):
+        d = np.full((self.node_num,),self.max_num) #存储节点间的最短距离
+        pre = []                                   #存储所有最短路径的前驱
+        vis = np.full((self.node_num,),0)          #是否访问标记
+        for i in range(self.node_num):
+            pre.append([i])
+        d[node] = 0
+        for i in range(1,self.node_num):
+            u = -1
+            min_num = self.max_num
+            for j in range(1,self.node_num):
+                if(vis[j]==0 and d[j]<min_num):
+                    u = j
+                    min_num = d[j]
+            vis[u] = 1
+            for v in range(1,self.node_num):
+                du = d[u] + self.map[map_idx][u][v][self.time_idx]
+                if (vis[v]==0 and self.map[map_idx][u][v][self.time_idx]!=self.max_num):
+                    if du < d[v]:
+                        d[v] = du
+                        pre[v] = []
+                        pre[v].append(u)
+                    elif du == d[v]:
+                        pre[v].append(u)
+        return pre
     #存储所有节点之间的最短路径
     def find_path(self):
         #对所有节点作dijkstra
@@ -204,6 +256,14 @@ class Map_Create(object):
                 for j in range(1,self.node_num):
                     path = DFS(i, j, pre)
                     self.path[path_idx][i][j] = path
+        pass
+    #存储所有节点之间的所有最短路径
+    def find_all_path(self):
+        for i in range(1,self.node_num):
+            pre = self.dijkstra_all(i,self.norm_map_idx)
+            for j in range(1,self.node_num):
+                path = get_paths(i, j, pre)
+                self.all_shortest_paths[i][j] = path
         pass
     '''
     绕路判断
@@ -221,48 +281,81 @@ class Map_Create(object):
         
         return now_path
 class Schedul_Strate(object):
-    def __init__(self, map_, car_df, path, answer_path):
+    def __init__(self, map_, car_df, path, all_shortest_paths, answer_path):
         self.norm_map_idx = 0
         self.high_map_idx = 1
         self.low_map_idx = 2
         self.map = map_
         self.car_df = car_df.copy()
         self.path = path
+        self.all_shortest_paths = all_shortest_paths
         self.answer_path = answer_path
         
     '''
     车辆调度
     先来先服务，行驶最短路径
     '''
-    def schedule(self):
+    def fifo_schedule(self):
         #按时间排序
         self.car_df = self.car_df.sort_values(by='planTime',axis=0)
         self.car_df.reset_index(inplace=True,drop=True)
         with open(self.answer_path,'w') as f:
             f.writelines('#(carId,StartTime,RoadId...)\n')
             #循环处理车辆并写入结果
+            road_use = np.full((105,),0,dtype=int)
             for i in self.car_df.index:
                 car_id,node_from,node_to,speed,planTime = self.car_df.loc[i,:]
                 if speed >= 6 :
                     map_idx = self.high_map_idx
                 else:
-                    map_idx = self.low_map_idx
-                planTime = random.randint(planTime,planTime+600)
+                    map_idx = self.norm_map_idx
+                planTime = random.randint(planTime,planTime+580)
                 buffer = '('+str(car_id)+','+str(planTime)
                 now_path = self.path[map_idx][node_from][node_to]
                 for i in range(1,len(now_path)):
                     now_node = now_path[i]
                     last_node = now_path[i-1]
-                    road_id = self.map[self.norm_map_idx][last_node][now_node][0]
+                    road_id = self.map[map_idx][last_node][now_node][0]
+                    road_use[road_id-5000] += 1
                     buffer += ',' + str(road_id)
                 buffer += ')\n'
                 f.writelines(buffer)
-        pass
+        return road_use
+    '''
+    车辆调度
+    先来先服务，随机选择一条最短的路径
+    '''
+    def rdom_path_schedule(self):
+        #按时间排序
+        self.car_df = self.car_df.sort_values(by='planTime',axis=0)
+        self.car_df.reset_index(inplace=True,drop=True)
+        with open(self.answer_path,'w') as f:
+            f.writelines('#(carId,StartTime,RoadId...)\n')
+            #循环处理车辆并写入结果
+            road_use = np.full((105,),0,dtype=int)
+            for i in self.car_df.index:
+                car_id,node_from,node_to,speed,planTime = self.car_df.loc[i,:]
+                map_idx = self.norm_map_idx
+                planTime = random.randint(planTime,planTime+580)
+                buffer = '('+str(car_id)+','+str(planTime)
+                
+                path_num = len(self.all_shortest_paths[node_from][node_to])
+                path_idx = random.randint(0, path_num-1)
+                now_path = self.all_shortest_paths[node_from][node_to][path_idx]
+                for i in range(1,len(now_path)):
+                    now_node = now_path[i]
+                    last_node = now_path[i-1]
+                    road_id = self.map[map_idx][last_node][now_node][0]
+                    road_use[road_id-5000] += 1
+                    buffer += ',' + str(road_id)
+                buffer += ')\n'
+                f.writelines(buffer)
+        return road_use
 def main():
     if len(sys.argv) != 5:
         logging.info('please input args: car_path, road_path, cross_path, answerPath')
         exit(1)
-
+    
     car_path = sys.argv[1]
     road_path = sys.argv[2]
     cross_path = sys.argv[3]
@@ -278,8 +371,8 @@ def main():
     # process
     Map = Map_Create(Data.road_df, Data.cross_df)
     # to write output file
-    Strate = Schedul_Strate(Map.map, Data.car_df, Map.path, answer_path)
-    Strate.schedule()
+    Strate = Schedul_Strate(Map.map, Data.car_df, Map.path, Map.all_shortest_paths, answer_path)
+    Strate.fifo_schedule()
 if __name__ == "__main__":
     main()
 #    car_path = './1-map-training-1/car.txt'
@@ -289,5 +382,6 @@ if __name__ == "__main__":
 #    
 #    Data = Read_Data(car_path, road_path, cross_path, answer_path)
 #    Map = Map_Create(Data.road_df, Data.cross_df)
-#    Strate = Schedul_Strate(Map.map, Data.car_df, Map.path, answer_path)
-#    Strate.schedule()
+#    Strate = Schedul_Strate(Map.map, Data.car_df, Map.path, Map.all_shortest_paths, answer_path)
+#    road_use = Strate.rdom_path_schedule()
+    
