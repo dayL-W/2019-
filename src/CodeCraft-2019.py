@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import random
 import queue
+import math
 
 logging.basicConfig(level=logging.DEBUG,
                     filename='./logs/CodeCraft-2019.log',
@@ -11,7 +12,7 @@ logging.basicConfig(level=logging.DEBUG,
                     datefmt='%Y-%m-%d %H:%M:%S',
                     filemode='a')
 
-
+random.seed(2019)
 class Read_Data(object):
     def __init__(self,car_path,road_path,cross_path,answer_path):
         self.car_path = car_path
@@ -285,17 +286,26 @@ class Schedul_Strate(object):
         self.norm_map_idx = 0
         self.high_map_idx = 1
         self.low_map_idx = 2
+        self.id_idx = 0
+        self.length_idx = 1
+        self.speed_idx = 2
+        self.channel_idx = 3
+        self.time_idx = 4
         self.map = map_
         self.car_df = car_df.copy()
         self.path = path
         self.all_shortest_paths = all_shortest_paths
         self.answer_path = answer_path
+        self.car_time = pd.DataFrame(columns=['id','arrive','use','add','begin','end'],dtype=np.int32)
         
     '''
     车辆调度
     先来先服务，行驶最短路径
     '''
     def fifo_schedule(self):
+        '''
+        道路5039，有0.2的概率被替换成5033,5032,5038,5044,5045或者反向
+        '''
         #按时间排序
         self.car_df = self.car_df.sort_values(by='planTime',axis=0)
         self.car_df.reset_index(inplace=True,drop=True)
@@ -303,23 +313,52 @@ class Schedul_Strate(object):
             f.writelines('#(carId,StartTime,RoadId...)\n')
             #循环处理车辆并写入结果
             road_use = np.full((105,),0,dtype=int)
-            for i in self.car_df.index:
-                car_id,node_from,node_to,speed,planTime = self.car_df.loc[i,:]
-                if speed >= 6 :
+            for car_idx in self.car_df.index:
+                car_ser = pd.Series(index=['id','arrive','use','add', 'begin','end'],dtype=np.int32,data=0)
+                use_time = 0
+                car_id,node_from,node_to,car_speed,planTime = self.car_df.loc[car_idx,:]
+                if car_speed >= 6 :
                     map_idx = self.high_map_idx
                 else:
                     map_idx = self.norm_map_idx
-                planTime = random.randint(planTime,planTime+580)
-                buffer = '('+str(car_id)+','+str(planTime)
+                start_time = random.randint(planTime,planTime+598)
+                buffer = '('+str(car_id)+','+str(start_time)
+
                 now_path = self.path[map_idx][node_from][node_to]
                 for i in range(1,len(now_path)):
                     now_node = now_path[i]
                     last_node = now_path[i-1]
                     road_id = self.map[map_idx][last_node][now_node][0]
-                    road_use[road_id-5000] += 1
+                    if road_id == 5039:
+                        if random.random()<=0.2:
+                            if last_node == 22:
+                                road_id = '5033,5032,5038,5044,5045'
+                            elif last_node == 38:
+                                road_id = '5045,5044,5038,5032,5033'
+                            road_use[33] += 1
+                            road_use[32] += 1
+                            road_use[38] += 1
+                            road_use[44] += 1
+                            road_use[45] += 1
+                        else:
+                            road_use[road_id-5000] += 1
+                    else:
+                        road_use[road_id-5000] += 1
                     buffer += ',' + str(road_id)
+                    
+                    road_speed = self.map[map_idx][last_node][now_node][self.speed_idx]
+                    road_length = self.map[map_idx][last_node][now_node][self.length_idx]
+                    use_time += math.ceil(min(car_speed, road_speed) / road_length)
+                car_ser.loc['id'] = car_id
+                car_ser.loc['arrive'] = planTime
+                car_ser.loc['use'] = use_time
+                car_ser.loc['add'] = int(planTime + use_time)
+                self.car_time.loc[car_idx] = car_ser
+
                 buffer += ')\n'
                 f.writelines(buffer)
+        self.car_time.sort_values(by=['add','arrive'],inplace=True)
+        self.car_time.reset_index(drop=True,inplace=True)
         return road_use
     '''
     车辆调度
@@ -333,11 +372,13 @@ class Schedul_Strate(object):
             f.writelines('#(carId,StartTime,RoadId...)\n')
             #循环处理车辆并写入结果
             road_use = np.full((105,),0,dtype=int)
-            for i in self.car_df.index:
-                car_id,node_from,node_to,speed,planTime = self.car_df.loc[i,:]
+            for car_idx in self.car_df.index:
+                car_ser = pd.Series(index=['id','arrive','use','add', 'begin','end'],dtype=np.int32,data=0)
+                use_time = 0
+                car_id,node_from,node_to,car_speed,planTime = self.car_df.loc[car_idx,:]
                 map_idx = self.norm_map_idx
-                planTime = random.randint(planTime,planTime+580)
-                buffer = '('+str(car_id)+','+str(planTime)
+                start_time = random.randint(planTime,planTime+580)
+                buffer = '('+str(car_id)+','+str(start_time)
                 
                 path_num = len(self.all_shortest_paths[node_from][node_to])
                 path_idx = random.randint(0, path_num-1)
@@ -348,9 +389,72 @@ class Schedul_Strate(object):
                     road_id = self.map[map_idx][last_node][now_node][0]
                     road_use[road_id-5000] += 1
                     buffer += ',' + str(road_id)
+                    
+                    road_speed = self.map[map_idx][last_node][now_node][self.speed_idx]
+                    road_length = self.map[map_idx][last_node][now_node][self.length_idx]
+                    use_time += math.ceil(min(car_speed, road_speed) / road_length)
+                car_ser.loc['id'] = car_id
+                car_ser.loc['arrive'] = planTime
+                car_ser.loc['use'] = use_time
+                car_ser.loc['add'] = int(planTime + use_time)
+                self.car_time.loc[car_idx] = car_ser
+                
                 buffer += ')\n'
                 f.writelines(buffer)
         return road_use
+    '''
+    限制道路网上车的数量
+    '''
+    def restrict_car(self):
+        self.car_max_num = 150
+        now_time = 1
+        car_queue = queue.Queue(maxsize=self.car_max_num)
+        #对所有的车辆
+        for idx in self.car_time.index:
+            if car_queue.full() == True:
+                #把队列拿出来重新按照end_time排序
+                qu_df = pd.DataFrame(columns=['id','arrive','use','add','begin','end'])
+                cnt = 0
+                while car_queue.empty() == False:
+                    qu_df.loc[cnt,:] = car_queue.get_nowait()
+                    cnt += 1
+                qu_df.sort_values(by=['end'],inplace=True)
+                for x in qu_df.index:
+                    now_car = qu_df.loc[x]
+                    car_queue.put_nowait(now_car)
+                now_car = car_queue.get_nowait()
+                now_time = now_car.end
+                while car_queue.empty() == False:
+                    now_car = car_queue.get_nowait()
+                    tmp = now_car.end
+                    if tmp != now_time:
+                        break
+            if car_queue.full() == False:
+                now_car = self.car_time.loc[idx]
+                now_car.begin = now_time
+                now_car.end = now_time + now_car.use
+                car_queue.put_nowait(now_car)
+    '''
+    生成车辆限行的答案
+    '''
+    def restrict_schedule(self):
+        #打开一个临时文件
+        buffer = ''
+        with open(self.answer_path, 'r') as f:
+            buffer = f.readline()
+            for line in f:
+                tmp = ''
+                car_path = line.split(',')
+                car_id = int(car_path[0].strip('('))
+                begin = int(self.car_time.loc[self.car_time.id==car_id,'begin'])
+                car_path[1] = str(begin)
+                for i in car_path:
+                    tmp += ','+i
+                tmp = tmp.strip(',')
+                buffer += tmp
+        with open(self.answer_path, 'w') as f:
+            f.write(buffer)
+                
 def main():
     if len(sys.argv) != 5:
         logging.info('please input args: car_path, road_path, cross_path, answerPath')
@@ -373,6 +477,8 @@ def main():
     # to write output file
     Strate = Schedul_Strate(Map.map, Data.car_df, Map.path, Map.all_shortest_paths, answer_path)
     Strate.fifo_schedule()
+#    Strate.restrict_car()
+#    Strate.restrict_schedule()
 if __name__ == "__main__":
     main()
 #    car_path = './1-map-training-1/car.txt'
@@ -383,5 +489,7 @@ if __name__ == "__main__":
 #    Data = Read_Data(car_path, road_path, cross_path, answer_path)
 #    Map = Map_Create(Data.road_df, Data.cross_df)
 #    Strate = Schedul_Strate(Map.map, Data.car_df, Map.path, Map.all_shortest_paths, answer_path)
-#    road_use = Strate.rdom_path_schedule()
+#    road_use = Strate.fifo_schedule()
+#    Strate.restrict_car()
+#    Strate.restrict_schedule()
     
