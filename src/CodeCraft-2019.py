@@ -259,7 +259,7 @@ class Map_Create(object):
                         d[v] = du
                         pre[v] = []
                         pre[v].append(u)
-                    elif du <= (d[v]+2):
+                    elif du <= (d[v]+3):
                         pre[v].append(u)
         return pre
     #存储所有节点之间的最短路径
@@ -377,7 +377,7 @@ class Schedul_Strate(object):
                 use_time = 0
                 car_id,node_from,node_to,car_speed,planTime = self.car_df.loc[car_idx,['id','from_a','to_a','speed','planTime']]
                 map_idx = self.norm_map_idx
-                start_time = random.randint(planTime,planTime+2000)
+                start_time = random.randint(planTime,planTime+3000)
                 buffer = '('+str(car_id)+','+str(start_time)
                 
                 path_num = len(self.all_shortest_paths[node_from][node_to])
