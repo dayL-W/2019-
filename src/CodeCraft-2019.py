@@ -126,10 +126,10 @@ class Map_Create(object):
     
     def init_map(self):
         for i in self.road_df.index:
-            road =self.road_df.loc[i,:]
+            road =self.road_df.loc[i,['id','length','speed','channel','from_a','to_a','isDuplex']]
             road_value = np.full((5,),self.max_num,dtype=int)
             road_value[0:4] = road.values[0:4]
-            road_value[4] = int(road_value[1] / road_value[3])
+            road_value[4] = math.ceil(road.length / road.speed)
             node_from = road.loc['from_a']
             node_to = road.loc['to_a']
             self.map[self.norm_map_idx][node_from][node_to] = road_value
@@ -259,7 +259,7 @@ class Map_Create(object):
                         d[v] = du
                         pre[v] = []
                         pre[v].append(u)
-                    elif du == d[v]:
+                    elif du == (d[v]):
                         pre[v].append(u)
         return pre
     #存储所有节点之间的最短路径
@@ -480,18 +480,18 @@ def main():
 #    Strate.restrict_car()
 #    Strate.restrict_schedule()
 if __name__ == "__main__":
-#    main()
+    main()
     
-    time0 = time.time()
-    car_path = './1-map-exam-2/car.txt'
-    road_path = './1-map-exam-2/road.txt'
-    cross_path = './1-map-exam-2/cross.txt'
-    answer_path = './1-map-exam-2/answer.txt'
-    
-    Data = Read_Data(car_path, road_path, cross_path, answer_path)
-    Map = Map_Create(Data.road_df, Data.cross_df)
-    Strate = Schedul_Strate(Map.map, Data.car_df, Map.path, Map.all_shortest_paths, answer_path)
-    Strate.rdom_path_schedule()
+#    time0 = time.time()
+#    car_path = './1-map-exam-2/car.txt'
+#    road_path = './1-map-exam-2/road.txt'
+#    cross_path = './1-map-exam-2/cross.txt'
+#    answer_path = './1-map-exam-2/answer.txt'
+#    
+#    Data = Read_Data(car_path, road_path, cross_path, answer_path)
+#    Map = Map_Create(Data.road_df, Data.cross_df)
+#    Strate = Schedul_Strate(Map.map, Data.car_df, Map.path, Map.all_shortest_paths, answer_path)
+#    Strate.rdom_path_schedule()
 #    time1 = time.time()
 #    print('use:',time1-time0)
 #    Strate.restrict_car()
