@@ -259,7 +259,7 @@ class Map_Create(object):
                         d[v] = du
                         pre[v] = []
                         pre[v].append(u)
-                    elif du == (d[v]):
+                    elif du <= (d[v]+2):
                         pre[v].append(u)
         return pre
     #存储所有节点之间的最短路径
@@ -480,20 +480,20 @@ def main():
 #    Strate.restrict_car()
 #    Strate.restrict_schedule()
 if __name__ == "__main__":
-    main()
+#    main()
     
-#    time0 = time.time()
-#    car_path = './1-map-exam-2/car.txt'
-#    road_path = './1-map-exam-2/road.txt'
-#    cross_path = './1-map-exam-2/cross.txt'
-#    answer_path = './1-map-exam-2/answer.txt'
-#    
-#    Data = Read_Data(car_path, road_path, cross_path, answer_path)
-#    Map = Map_Create(Data.road_df, Data.cross_df)
-#    Strate = Schedul_Strate(Map.map, Data.car_df, Map.path, Map.all_shortest_paths, answer_path)
+    time0 = time.time()
+    car_path = './1-map-exam-2/car.txt'
+    road_path = './1-map-exam-2/road.txt'
+    cross_path = './1-map-exam-2/cross.txt'
+    answer_path = './1-map-exam-2/answer.txt'
+    
+    Data = Read_Data(car_path, road_path, cross_path, answer_path)
+    Map = Map_Create(Data.road_df, Data.cross_df)
+    Strate = Schedul_Strate(Map.map, Data.car_df, Map.path, Map.all_shortest_paths, answer_path)
 #    Strate.rdom_path_schedule()
-#    time1 = time.time()
-#    print('use:',time1-time0)
+    time1 = time.time()
+    print('use:',time1-time0)
 #    Strate.restrict_car()
 #    Strate.restrict_schedule()
     
