@@ -121,7 +121,7 @@ class Map_Create(object):
         self.init_low_way()
         self.path = np.ndarray((3,self.node_num,self.node_num),dtype=object)
         self.all_shortest_paths = np.ndarray((self.node_num,self.node_num),dtype=object)
-        self.find_path()
+#        self.find_path()
         self.find_all_path()
     
     def init_map(self):
@@ -340,29 +340,10 @@ class Schedul_Strate(object):
                 buffer = '('+str(car_id)+','+str(start_time)
 
                 now_path = self.path[map_idx][node_from][node_to]
-                for i in range(len(now_path)):
+                for i in range(1,len(now_path)):
                     now_node = now_path[i]
                     last_node = now_path[i-1]
-                    if i-2>=0:
-                        ll_node = now_path[i-2]
-                    else:
-                        ll_node = -1
                     road_id = self.map[map_idx][last_node][now_node][0]
-                    if road_id == 5039:
-                        if random.random()<=0.4:
-                            if last_node == 22 and ll_node == 14:
-                                road_id = '5033,5032,5038,5044,5045'
-                            elif last_node == 38 and ll_node == 38:
-                                road_id = '5045,5044,5038,5032,5033'
-                            road_use[33] += 1
-                            road_use[32] += 1
-                            road_use[38] += 1
-                            road_use[44] += 1
-                            road_use[45] += 1
-                        else:
-                            road_use[road_id-5000] += 1
-                    else:
-                        road_use[road_id-5000] += 1
                     buffer += ',' + str(road_id)
                     
                     road_speed = self.map[map_idx][last_node][now_node][self.speed_idx]
@@ -396,13 +377,13 @@ class Schedul_Strate(object):
                 use_time = 0
                 car_id,node_from,node_to,car_speed,planTime = self.car_df.loc[car_idx,['id','from_a','to_a','speed','planTime']]
                 map_idx = self.norm_map_idx
-                start_time = random.randint(planTime,planTime+580)
+                start_time = random.randint(planTime,planTime+2000)
                 buffer = '('+str(car_id)+','+str(start_time)
                 
                 path_num = len(self.all_shortest_paths[node_from][node_to])
                 path_idx = random.randint(0, path_num-1)
                 now_path = self.all_shortest_paths[node_from][node_to][path_idx]
-                for i in range(len(now_path)):
+                for i in range(1,len(now_path)):
                     now_node = now_path[i]
                     last_node = now_path[i-1]
                     road_id = self.map[map_idx][last_node][now_node][0]
@@ -499,18 +480,18 @@ def main():
 #    Strate.restrict_car()
 #    Strate.restrict_schedule()
 if __name__ == "__main__":
-    main()
+#    main()
     
-#    time0 = time.time()
-#    car_path = './1-map-exam-1/car.txt'
-#    road_path = './1-map-exam-1/road.txt'
-#    cross_path = './1-map-exam-1/cross.txt'
-#    answer_path = './1-map-exam-1/answer.txt'
-#    
-#    Data = Read_Data(car_path, road_path, cross_path, answer_path)
-#    Map = Map_Create(Data.road_df, Data.cross_df)
-#    Strate = Schedul_Strate(Map.map, Data.car_df, Map.path, Map.all_shortest_paths, answer_path)
-#    Strate.rdom_path_schedule()
+    time0 = time.time()
+    car_path = './1-map-exam-2/car.txt'
+    road_path = './1-map-exam-2/road.txt'
+    cross_path = './1-map-exam-2/cross.txt'
+    answer_path = './1-map-exam-2/answer.txt'
+    
+    Data = Read_Data(car_path, road_path, cross_path, answer_path)
+    Map = Map_Create(Data.road_df, Data.cross_df)
+    Strate = Schedul_Strate(Map.map, Data.car_df, Map.path, Map.all_shortest_paths, answer_path)
+    Strate.rdom_path_schedule()
 #    time1 = time.time()
 #    print('use:',time1-time0)
 #    Strate.restrict_car()
