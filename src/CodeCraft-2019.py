@@ -235,7 +235,7 @@ class Map_Create(object):
     '''
     单源最短路径
     输入：当前节点
-    输出：所有的最短路径，所有的最短路径只有一条？？
+    输出：所有的最短路径
     '''
     def dijkstra_all(self,node,map_idx):
         d = np.full((self.node_num,),self.max_num) #存储节点间的最短距离
